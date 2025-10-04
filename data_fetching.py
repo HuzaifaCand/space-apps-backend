@@ -1,137 +1,120 @@
 import requests
 import pandas as pd
-from functools import lru_cache
 
+
+# Test Coordinates & Dates
+# lat, lon = 24.8, 68.0
+# start, end = "20250801", "20250831" # (YYYY/MM/DD) 
 base_url = "https://power.larc.nasa.gov/api/temporal/daily/point"
-parameters = "PRECTOTCORR,T2M,WS2M,RH2M"
-new_params = "T2MDEW,T2M_MAX,T2M_MIN,PS,T2MWET,WS50M,QV2M,WS10M"
+parameters = "PRECTOTCORR,T2M,WS2M,WS10M,RH2M,QV2M"
+new_params = "T2MDEW,T2M_MAX,T2M_MIN,PS,T2MWET,WS50M"
 
 
-def get_from_mainframe():
-    """
-    Handles input from the front-end or provides test/default values.
-    ------
-    Returns:
-        tuple: (lat: float, lon: float, date: str, days: int, years: int)
-    """
-    # For testing / default
-    lat, lon = 24.8, 68.0
-    date = "2019/08/30"
-    days, years = 2, 5
-    return lat, lon, date, days, years
+"""
+Parameters (POWER API variables):
 
+- PRECTOTCORR : Precipitation (mm/day)
+    - Daily total precipitation corrected for known biases.
+    - Unit: millimeters per day (mm/day).
+    - Useful for identifying rainy days and estimating rainfall totals.
 
-def build_url(base_url: str, lat: float, lon: float, start, end, parameters: str) -> str:
+- T2M : Air Temperature at 2 meters (°C)
+    - Mean daily air temperature measured at 2 meters above ground.
+    - Unit: degrees Celsius (°C).
+    - Used for heat/cold exposure, comfort, and event planning.
+
+- WS2M : Wind Speed at 2 meters (m/s)
+    - Average wind speed at 2 meters height.
+    - Unit: meters per second (m/s).
+    - Captures near-surface breezes, less relevant for event disruption.
+
+- WS10M : Wind Speed at 10 meters (m/s)
+    - Average wind speed at 10 meters height.
+    - Unit: meters per second (m/s).
+    - Standard meteorological reference; better indicator of wind conditions for outdoor events.
+
+- RH2M : Relative Humidity at 2 meters (%)
+    - Mean relative humidity at 2 meters height.
+    - Unit: percent (%).
+    - Important for discomfort, mugginess, and heat index calculations.
+
+- QV2M : Specific Humidity at 2 meters (g/kg)
+    - Mass of water vapor per unit mass of moist air at 2 meters.
+    - Unit: grams per kilogram (g/kg).
+    - More physically accurate than RH; useful for advanced weather modeling, but less intuitive.
+"""
+
+# Constructs URL
+def build_url(base_url: str, lat: float, lon: float, start: str, end: str, parameters: str) -> str:
     """
-    Builds a NASA POWER API request URL.
-    ------
-    Parameters:
-        base_url: str
-        lat: float
-        lon: float
-        start: datetime
-        end: datetime
-        parameters: str, comma-separated API variables
-    Returns:
-        str: Complete API URL
+    Build a NASA POWER API or similar data request URL.
     """
-    start_str, end_str = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
+
+    # Convert To Power API Format (YYYYMMDD)
+    start, end = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
     url = (
         f"{base_url}"
-        f"?parameters={parameters}"
-        f"&community=AG"
-        f"&longitude={lon}&latitude={lat}"
-        f"&start={start_str}&end={end_str}"
-        f"&format=JSON"
+        f"?parameters={parameters}"        # Parameters to fetch
+        f"&community=AG"                   # Agricultural Data
+        f"&longitude={lon}&latitude={lat}" # Location
+        f"&start={start}&end={end}"        # Time range
+        f"&format=JSON"                    # Response format
     )
     return url
 
 
+# Fetches Data From API
 def fetch_data(url: str) -> dict:
     """
-    Fetches data from NASA POWER API.
-    ------
-    Parameters:
-        url: str
-    Returns:
-        dict: JSON response if successful, None otherwise
+    Fetch data from NASA API with simple error handling.
     """
     response = requests.get(url)
-    if response.status_code == 200:
+
+    if response.status_code == 200:  # Success
         return response.json()
-    print("Error:", response.status_code, response.text)
-    return None
+    else:
+        print("Error:", response.status_code, response.text)
+        return None
+    
 
-
+# Processes Data Into Data Frame
 def process_data(raw_data: dict) -> pd.DataFrame:
     """
-    Converts NASA POWER JSON data to a pandas DataFrame.
-    ------
-    Parameters:
-        raw_data: dict
-    Returns:
-        pd.DataFrame
+    Process raw NASA API JSON response into a Pandas DataFrame.
     """
-    if not raw_data:
-        return pd.DataFrame()
+    if raw_data is None:
+        return pd.DataFrame()  # return empty DataFrame if error
     
     params = raw_data["properties"]["parameter"]
+
     df = pd.DataFrame({
         "Date": pd.to_datetime(list(params["PRECTOTCORR"].keys()), format="%Y%m%d"),
         "Precipitation (mm/day)": list(params["PRECTOTCORR"].values()),
         "Temperature to 2m (°C)": list(params["T2M"].values()),
         "Wind speed to 2m (m/s)": list(params["WS2M"].values()),
-        "Relative humidity 2m (%)": list(params["RH2M"].values())
+        "Wind speed to 10m (m/s)": list(params["WS10M"].values()),
+        "Relative humidity 2m (%)": list(params["RH2M"].values()),
+        "Specific humidity 2m (%)": list(params["QV2M"].values())
     })
+
     return df
 
-
+# Cleans Data If Needed
 def clean_data(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Fills missing numeric values with column mean.
-    ------
-    Parameters:
-        df: pd.DataFrame
-    Returns:
-        pd.DataFrame
-    """
+    # Fill missing values with column mean
     for col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
+        if df[col].dtype in ["float64", "int64"]:
             df[col] = df[col].fillna(df[col].mean())
     return df
 
 
+# Formats Data For Final Output
 def format_data(lat, lon, start, end, base_url=base_url, parameters=parameters) -> pd.DataFrame:
-    """
-    Fetches, processes, and cleans NASA POWER weather data.
-    ------
-    Parameters:
-        lat: float
-        lon: float
-        start: datetime
-        end: datetime
-        base_url: str
-        parameters: str
-    Returns:
-        pd.DataFrame
-    """
+    # Builds The URL
     url = build_url(base_url, lat, lon, start, end, parameters)
+    # Fetches The Raw Data
     raw_data = fetch_data(url)
-    df = process_data(raw_data)
-    return clean_data(df)
+    # Cleans & Converts Raw Data Into Array
+    return clean_data(process_data(raw_data))
 
-@lru_cache(maxsize=32)
-def format_data_cached(lat, lon, start, end):
-    """
-    Cached version of format_data to avoid repeated API calls.
-    Works if the user re-enters previous input. Good for testing.
-    ------
-    Parameters:
-        lat: float
-        lon: float
-        start: datetime
-        end: datetime
-    Returns:
-        pd.DataFrame
-    """
-    return format_data(lat, lon, start, end)
+

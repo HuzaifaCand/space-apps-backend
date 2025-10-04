@@ -1,33 +1,77 @@
-from data_fetching import get_from_mainframe
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, validator
+from datetime import datetime
 from data_handling import get_combined_dataframe
-from output_formatting import get_final_statistics, construct_json, return_to_mainframe
+from predict import check_humidity, check_precipitation, check_temperature, check_wind, check_heat_index
 
 
-def main():
-    """
-    Main entry point for the weather analysis program.
-    ------
-    Steps:
-        1. Gets target lat/lon/date from get_from_mainframe()
-        2. Generates combined weather data across years
-        3. Computes heat index and descriptive statistics
-        4. Outputs results as JSON
-    """
-    lat, lon, target_date, days, years = get_from_mainframe()
-    vector_data, yearly_data = get_combined_dataframe(lat, lon, target_date, days, years)
-    final_stats = get_final_statistics(vector_data)
-    full_json, yearly_json = construct_json(vector_data, yearly_data, final_stats)
-
-    print(yearly_json)
-    print(return_to_mainframe(final_stats))
+app = FastAPI()
 
 
+class Data(BaseModel):
+    date: str
+    lat: float
+    lon: float
 
-if __name__ == "__main__":
-    main()
+    @validator("lat")
+    def validate_lat(cls, v):
+        if not -90 <= v <= 90:
+            raise ValueError("Latitudinal Value should be between -90 and 90")
+        return v
+
+    @validator("lon")
+    def validate_lon(cls, v):
+        if not -180 <= v <= 180:
+            raise ValueError("Longtidunal Value should be between -180 and 180")
+        return v
+
+    @validator("date")
+    def validate_date(cls, v):
+        try:
+            datetime.strptime(v, "%Y/%m/%d")
+        except ValueError:
+            raise ValueError("Date must be in YYYY/MM/DD format")
+        return v
 
 
-""" Change Log [2nd October 2025] """
+@app.post("/")
+async def analyze_weather(request: Data):
+    try:
+        vector_data = get_combined_dataframe(
+            request.lat,
+            request.lon,
+            request.date
+        )
+
+        results = {
+            "Temperature": check_temperature(vector_data),
+            "Humidity": check_humidity(vector_data),
+            "Precipitation": check_precipitation(vector_data),
+            "Wind": check_wind(vector_data),
+            "Heat Index": check_heat_index(vector_data),
+        }
+
+        formatted_results = {
+            factor: {
+                "probability": float(prob),
+                "status": status,
+                "distribution": dist,
+            }
+            for factor, (prob, status, dist) in results.items()
+        }
+
+        return results
+    except Exception as e:
+        import traceback
+        print("⚠️ ERROR OCCURRED ⚠️")
+        traceback.print_exc()   # prints full stack trace in your console
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+""" Change Log """
 """
 - Removed Coordinate Validation (Assumes Pre-Validated Coordinates)
 - Converted date into datetime object, format is changed/handled separately in URL construction
@@ -59,26 +103,4 @@ if __name__ == "__main__":
 - Final output function is required, human output which is both readable + displays the status
 - Instead of hardcoding values, each prediction function can have a predefined input (ex. calm_threshold that is passed in as default)
 - The output needs to be wrapped in JSON, currently is dict, has to be more detailed (geopy could be used to determine exact location for JSON)
-"""
-
-
-""" Change Log [4th October 2025] """
-"""
-- Updated docstring documentation for all functions, removed comments
-- Moved all input extraction to data_fetching.py, data fetched directly from front-end
-- Setup get_from_mainframe(), all front-backend data handling can be sorted within the function, which itself returns the inputs
-- Function get_from_mainframe() expects string with lat,lon,date,days,years though if day and years not specified it takes a default value
-- Removed hardcoded values from filter_date() and filter_year() functions, as default values are handled in get_from_mainframe()
-- Main function now takes data as an argument, which is all the data wrapped into one string separated by "," to be handled within the backend program
-- Removed WS10m & QV2M from parameters to extract, both were unrequired
-- Setup get_column_statistics in predict.py, calculates measures of central tendency (mean, median, std etc..) for columns
-- Implemented get_column_statistics() into yearly data extraction, provides more insights for each year in JSON, made sure output is rounded to 2sf
-- Made sure get_column_statistics() and get_dataframe_statistics() don't show np.float datatypes, converted them into basic floats.
-- Fixed get_dataframe_statistics() to work on entire dataset without failing at range calculation
-- Created a new file, output_formatting.py, Moved both get_dataframe_statistics() and get_column_statistics() to it
-- Setup get_predictions(), which returns a dictionary of the predictions from the data set (works on both yearly and final dataset)
-- Created get_final_statistics() to merge both the normal statistics (measures of central tendency) for the final data with our specific statistics
-- Implemented get_statistics() directly into get_combined_dataframe() so all meaning statistics are added directly into the list of yearly dicts.
-- Setup construct_json, takes full data and yearly data, converts it into JSON objects to be sent
-- Setup return_to_mainframe(), takes the final statistics and sends the final data to the front-end in JSON format for use.
 """
