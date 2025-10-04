@@ -24,8 +24,8 @@ class Data(BaseModel):
     target_date: str
     lat: float
     lon: float
-    days: int = 2
-    years: int = 2
+    days: int
+    years: int
 
 @app.post('/')
 def results(data: Data):
