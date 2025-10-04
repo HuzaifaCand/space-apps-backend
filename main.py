@@ -32,17 +32,14 @@ def results(data: Data):
     """
     Main entry point for the weather analysis program.
     ------
-    Steps:
-        1. Gets target lat/lon/date from get_from_mainframe()
-        2. Generates combined weather data across years
-        3. Computes heat index and descriptive statistics
-        4. Outputs results as JSON
     """
     vector_data, yearly_data = get_combined_dataframe(data.lat, data.lon, data.target_date, data.days, data.years)
     final_stats = get_final_statistics(vector_data)
     full_json, yearly_json = construct_json(vector_data, yearly_data, final_stats)
 
-    return(return_to_mainframe(final_stats))
+    acc_final_stats = return_to_mainframe(final_stats)
+
+    return({"Predictions": acc_final_stats["Predictions"], "finalStatsFull": acc_final_stats, "fullJson": full_json, "yearlyJson": yearly_json})
 
 def main():
     import uvicorn
