@@ -39,7 +39,7 @@ def results(data: Data):
 
     acc_final_stats = return_to_mainframe(final_stats)
 
-    return({"Predictions": acc_final_stats["Predictions"], "finalStatsFull": acc_final_stats, "fullJson": full_json, "yearlyJson": yearly_json})
+    return({"finalStats": acc_final_stats, "fullJson": full_json, "yearlyJson": yearly_json})
 
 def main():
     import uvicorn
