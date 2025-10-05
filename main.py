@@ -33,6 +33,7 @@ class Data(BaseModel):
 def results(data: Data):
     vector_data, yearly_data = get_combined_dataframe(data.lat, data.lon, data.target_date, data.days, data.years)
     final_stats = get_final_statistics(vector_data)
+    acc_final_stats = return_to_mainframe(final_stats)
     full_json, yearly_json = construct_json(vector_data, yearly_data, final_stats)
 
     #Save them in FastAPI's app state (in-memory)
@@ -40,7 +41,7 @@ def results(data: Data):
     app.state.yearly_json = yearly_json
     app.state.final_stats = final_stats
 
-    return return_to_mainframe(final_stats)
+    return {"finalStats": acc_final_stats, "fullJson": full_json, "yearlyJson": yearly_json}
 
 
 @app.get('/full_json/download')
