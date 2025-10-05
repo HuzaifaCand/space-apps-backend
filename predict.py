@@ -43,7 +43,10 @@ def check_temperature(df):
         "Cool": (temp >= 11) & (temp <= 19),
         "Cold": (temp <= 10) & (temp > 5),
         "Very Cold": (temp <= 5)
+
     }
+
+    #why not pushing
 
     return classify_event(temp, categories)
 
