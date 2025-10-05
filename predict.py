@@ -39,12 +39,12 @@ def check_temperature(df):
         "Very Hot": (temp >= 40),
         "Hot": (temp >= 35) & (temp < 40),
         "Warm": (temp >= 30) & (temp < 35),
-        "Moderate": (temp >= 20) & (temp <= 29),
+        "Mild": (temp >= 20) & (temp <= 29),
         "Cool": (temp >= 11) & (temp <= 19),
         "Cold": (temp <= 10) & (temp > 5),
         "Very Cold": (temp <= 5)
 
-    }
+    }   
 
     #why not pushing
 
