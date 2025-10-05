@@ -49,8 +49,26 @@ def filter_years(target_date, years):
     Returns:
         list: Timestamps for equivalent dates in past years
     """
+    LOWER_BOUND = 1980
+    UPPER_BOUND = 2025
+
     target_date = pd.to_datetime(target_date, format="%Y/%m/%d")
-    return [target_date.replace(year=target_date.year - i) for i in range(1, years + 1)]
+
+    if target_date.year >= UPPER_BOUND:
+        target_date = target_date.replace(year=UPPER_BOUND)
+
+    if target_date.year < LOWER_BOUND:
+        raise ValueError(f"Date cannot be before {LOWER_BOUND}.")
+
+    years_list = []
+    for i in range(1, years + 1):
+        new_year = target_date.year - i
+        if new_year < LOWER_BOUND:
+            break  # stop if we reach below 1980
+        new_date = target_date.replace(year=new_year)
+        years_list.append(new_date)
+
+    return years_list
 
 
 def get_combined_dataframe(lat, lon, target_date, days, years):
